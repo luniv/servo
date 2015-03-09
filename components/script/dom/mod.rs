@@ -310,6 +310,7 @@ pub mod progressevent;
 pub mod range;
 pub mod screen;
 pub mod servohtmlparser;
+pub mod sourceset;
 pub mod storage;
 pub mod text;
 pub mod treewalker;
