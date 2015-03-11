@@ -107,7 +107,8 @@ mod parse {
                 }
             }
 
-            let source_set = super::SourceSet { sources: self.candidates };
+            let source_set = super::SourceSet { sources: self.candidates,
+                                                sizes: None };
             if self.parse_errors.is_empty() {
                 Ok(source_set)
             } else {
@@ -583,14 +584,16 @@ mod parse {
             // valid
             println!("valid");
             assert_eq!("".parse::<SourceSet>().unwrap(),
-                       SourceSet { sources: vec![]});
+                       SourceSet { sources: vec![], sizes: None });
 
             assert_eq!(" foo.png, bar.png 2x ".parse::<SourceSet>().unwrap(),
                        SourceSet { sources: vec![
                            ImageSource { url: "foo.png".to_owned(),
                                          descriptor: None },
                            ImageSource { url: "bar.png".to_owned(),
-                                         descriptor: Some(ImageDescriptor::PixelDensity(2.)) }]});
+                                         descriptor: Some(ImageDescriptor::PixelDensity(2.)) }],
+                                   sizes: None
+                       });
 
             // valid with errors
             println!("valid w/ errors");
@@ -599,7 +602,9 @@ mod parse {
                            ImageSource { url: "bar.png".to_owned(),
                                          descriptor: Some(ImageDescriptor::PixelDensity(1.)) },
                            ImageSource { url: "baz.png".to_owned(),
-                                         descriptor: Some(ImageDescriptor::PixelDensity(2.)) }]},
+                                         descriptor: Some(ImageDescriptor::PixelDensity(2.)) }],
+                                    sizes: None
+                       },
                         vec![pde!(UnsupportedType, 8..10, 'u')]));
 
             // invalid
@@ -607,7 +612,9 @@ mod parse {
             assert_eq!(",test.png,,,".parse::<SourceSet>().unwrap_err(),
                        (SourceSet { sources: vec![
                            ImageSource { url: "test.png".to_owned(),
-                                         descriptor: None }] },
+                                         descriptor: None }],
+                                    sizes: None
+                       },
                         vec![Error{ span: 0..1, kind: ErrorKind::UnexpectedComma },
                              Error{ span: 10..11, kind: ErrorKind::UnexpectedComma }]));
         }
@@ -629,6 +636,8 @@ pub struct ImageSource {
 #[derive(Debug, PartialEq)]
 pub struct SourceSet {
     pub sources: Vec<ImageSource>,
+    // TODO: source sizes list
+    pub sizes: Option<Vec<()>>,
 }
 
 impl FromStr for SourceSet {
