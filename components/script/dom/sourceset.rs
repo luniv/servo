@@ -441,6 +441,177 @@ mod parse {
             }
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::super::*;
+        use super::ImageSource as CandidateImageSource;
+        use super::ImageDescriptor as CandidateImageDescriptor;
+        use super::{Error, ErrorKind, DescriptorErrorKind};
+
+        use std::borrow::ToOwned;
+
+        macro_rules! cid {
+            ($span:expr, $value:expr) => {
+                CandidateImageDescriptor { span: $span, value: $value }
+            }
+        }
+
+        macro_rules! pde {
+            ($type_:ident, $span:expr) => {
+                Error {
+                    span: $span,
+                    kind: ErrorKind::Descriptor(DescriptorErrorKind::$type_)
+                }
+            };
+            ($type_:ident, $span:expr, $($arg:expr),+) => {
+                Error {
+                    span: $span,
+                    kind: ErrorKind::Descriptor(DescriptorErrorKind::$type_($($arg),+))
+                }
+            }
+        }
+
+        #[test]
+        fn to_image_source() {
+            // valid
+            println!("valid");
+            let input = CandidateImageSource { url: "test.png", descriptors: vec![] };
+            assert_eq!(input.to_image_source(),
+                       Ok(ImageSource { url: "test.png".to_owned(),
+                                        descriptor: None
+                       }));
+
+            let input = CandidateImageSource { url: "test.png", descriptors: vec![cid!(0..2, "1x")] };
+            assert_eq!(input.to_image_source(),
+                       Ok(ImageSource { url: "test.png".to_owned(),
+                                        descriptor: Some(ImageDescriptor::PixelDensity(1.))
+                       }));
+
+            // invalid
+            // width
+            println!("invalid: width");
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "0w"),
+                                                                 cid!(2..4, "zw")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 0..2, 'w'),
+                                       pde!(InvalidValue, 0..1),
+                                       pde!(InvalidValue, 2..3)])));
+
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "1w"),
+                                                                 cid!(2..4, "2w")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 0..2, 'w'),
+                                       pde!(UnsupportedType, 2..4, 'w'),
+                                       pde!(Duplicate, 2..4, 0..2)])));
+
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "1x"),
+                                                                 cid!(2..4, "2w")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 2..4, 'w'),
+                                       pde!(Incompatible, 2..4, 0..2)])));
+
+            // pixel density
+            println!("invalid: pixel density");
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..3, "-1x"),
+                                                                 cid!(3..5, "zx")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(InvalidValue, 0..2),
+                                       pde!(InvalidValue, 3..4)])));
+
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "1x"),
+                                                                 cid!(2..4, "2x")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(Duplicate, 2..4, 0..2)])));
+
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "1w"),
+                                                                 cid!(2..4, "2x")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 0..2, 'w'),
+                                       pde!(Incompatible, 2..4, 0..2)])));
+
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "1h"),
+                                                                 cid!(2..4, "2x")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 0..2, 'h'),
+                                       pde!(Incompatible, 2..4, 0..2),
+                                       pde!(HeightRequiresWidth, 0..2)])));
+
+            // height
+            println!("invalid: height");
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "0h"),
+                                                                 cid!(2..4, "zh")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 0..2, 'h'),
+                                       pde!(InvalidValue, 0..1),
+                                       pde!(InvalidValue, 2..3)])));
+
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "1h"),
+                                                                 cid!(2..4, "2h")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 0..2, 'h'),
+                                       pde!(UnsupportedType, 2..4, 'h'),
+                                       pde!(Duplicate, 2..4, 0..2),
+                                       pde!(HeightRequiresWidth, 0..2)])));
+
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "1x"),
+                                                                 cid!(2..4, "2h")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 2..4, 'h'),
+                                       pde!(Incompatible, 2..4, 0..2)])));
+
+            // unknown
+            println!("invalid: unknown");
+            let input = CandidateImageSource { url: "test.png",
+                                               descriptors: vec![cid!(0..2, "1u")] };
+            assert_eq!(input.to_image_source(),
+                       Err((None, vec![pde!(UnsupportedType, 0..2, 'u')])));
+        }
+
+        #[test]
+        fn parse() {
+            // valid
+            println!("valid");
+            assert_eq!("".parse::<SourceSet>().unwrap(),
+                       SourceSet { sources: vec![]});
+
+            assert_eq!(" foo.png, bar.png 2x ".parse::<SourceSet>().unwrap(),
+                       SourceSet { sources: vec![
+                           ImageSource { url: "foo.png".to_owned(),
+                                         descriptor: None },
+                           ImageSource { url: "bar.png".to_owned(),
+                                         descriptor: Some(ImageDescriptor::PixelDensity(2.)) }]});
+
+            // valid with errors
+            println!("valid w/ errors");
+            assert_eq!("foo.png 2u, bar.png 1x, baz.png 2x".parse::<SourceSet>().unwrap_err(),
+                       (SourceSet { sources: vec![
+                           ImageSource { url: "bar.png".to_owned(),
+                                         descriptor: Some(ImageDescriptor::PixelDensity(1.)) },
+                           ImageSource { url: "baz.png".to_owned(),
+                                         descriptor: Some(ImageDescriptor::PixelDensity(2.)) }]},
+                        vec![pde!(UnsupportedType, 8..10, 'u')]));
+
+            // invalid
+            println!("invalid");
+            assert_eq!(",test.png,,,".parse::<SourceSet>().unwrap_err(),
+                       (SourceSet { sources: vec![
+                           ImageSource { url: "test.png".to_owned(),
+                                         descriptor: None }] },
+                        vec![Error{ span: 0..1, kind: ErrorKind::UnexpectedComma },
+                             Error{ span: 10..11, kind: ErrorKind::UnexpectedComma }]));
+        }
+    }
 }
 
 #[derive(Copy, Debug, PartialEq)]
