@@ -445,10 +445,11 @@ mod parse {
 
     #[cfg(test)]
     mod tests {
-        use super::super::*;
+        use super::super::SourceSet;
+
         use super::ImageSource as CandidateImageSource;
         use super::ImageDescriptor as CandidateImageDescriptor;
-        use super::{Error, ErrorKind, DescriptorErrorKind};
+        use super::{Error, ErrorKind, DescriptorErrorKind, SourceSetParser};
 
         use std::borrow::ToOwned;
 
@@ -583,10 +584,10 @@ mod parse {
         fn parse() {
             // valid
             println!("valid");
-            assert_eq!("".parse::<SourceSet>().unwrap(),
+            assert_eq!(SourceSetParser::new("").parse().unwrap(),
                        SourceSet { sources: vec![], sizes: None });
 
-            assert_eq!(" foo.png, bar.png 2x ".parse::<SourceSet>().unwrap(),
+            assert_eq!(SourceSetParser::new(" foo.png, bar.png 2x ").parse().unwrap(),
                        SourceSet { sources: vec![
                            ImageSource { url: "foo.png".to_owned(),
                                          descriptor: None },
@@ -597,7 +598,7 @@ mod parse {
 
             // valid with errors
             println!("valid w/ errors");
-            assert_eq!("foo.png 2u, bar.png 1x, baz.png 2x".parse::<SourceSet>().unwrap_err(),
+            assert_eq!(SourceSetParser::new("foo.png 2u, bar.png 1x, baz.png 2x").parse().unwrap_err(),
                        (SourceSet { sources: vec![
                            ImageSource { url: "bar.png".to_owned(),
                                          descriptor: Some(ImageDescriptor::PixelDensity(1.)) },
@@ -609,7 +610,7 @@ mod parse {
 
             // invalid
             println!("invalid");
-            assert_eq!(",test.png,,,".parse::<SourceSet>().unwrap_err(),
+            assert_eq!(SourceSetParser::new(",test.png,,,").parse().unwrap_err(),
                        (SourceSet { sources: vec![
                            ImageSource { url: "test.png".to_owned(),
                                          descriptor: None }],
